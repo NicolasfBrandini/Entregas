@@ -2,7 +2,6 @@ import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import { Header, Icon, ListItem, Button } from "@rneui/themed";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { ListItemAccordion } from "@rneui/base/dist/ListItem/ListItem.Accordion";
 import { useState } from "react";
 
 // status: ROTA , ATRASADO , ENTREGUE , NAORECEBIDO
@@ -39,6 +38,11 @@ const listagem = [
 
 export default function App() {
   const [listaEntrega, setListaEntrega] = useState(listagem);
+
+  function telaConfirmar() {
+    console.log("tela");
+  }
+
   return (
     <SafeAreaProvider>
       <Header
@@ -51,6 +55,7 @@ export default function App() {
       {listaEntrega.map((item, idx) => {
         return (
           <ListItem.Accordion
+            key={idx}
             content={
               <>
                 <ListItem.Content>
@@ -73,8 +78,8 @@ export default function App() {
 
               <Button
                 title="Confirmar Entrega"
-                style={css.btnConfirmar}
                 onPress={telaConfirmar}
+                style={css.btnConfirmar}
               />
             </View>
           </ListItem.Accordion>
