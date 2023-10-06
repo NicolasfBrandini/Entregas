@@ -1,47 +1,79 @@
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
-import { Header, Icon, ListItem, Button } from "@rneui/themed";
+import { Header, ListItem, Dialog, Button, CheckBox, Tab } from "@rneui/themed";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  collection,
+  getDocs,
+  getFirestore,
+  query,
+  where,
+  updateDoc,
+  GeoPoint,
+  doc,
+} from "firebase/firestore";
+import firebaseApp from "./firebase";
+import * as Location from "expo-location";
+
+const db = getFirestore(firebaseApp);
 
 // status: ROTA , ATRASADO , ENTREGUE , NAORECEBIDO
 
-const listagem = [
-  {
-    ordem_servico: "1234",
-    clinte: "Nicolas",
-    endereco: "Rua das Flores, 123",
-    status: "ROTA",
-    produto: "caneca",
-    nota_fiscal: 1231,
-    exibe: false,
-  },
-  {
-    ordem_servico: "12436",
-    clinte: "sasa",
-    endereco: "Rua das Flores, 123",
-    status: "ATRASADO",
-    produto: "caneca",
-    nota_fiscal: 12345,
-    exibe: false,
-  },
-  {
-    ordem_servico: "8634",
-    clinte: "Nicolas",
-    endereco: "Rua das Flores, 123",
-    status: "ENTREGUE",
-    produto: "caneca",
-    nota_fiscal: 4123,
-    exibe: false,
-  },
-];
-
 export default function App() {
-  const [listaEntrega, setListaEntrega] = useState(listagem);
+  const [listaEntrega, setListaEntrega] = useState([]);
+  const [statusSelecionado, setStatus] = useState(0);
+  const [exibeDialogo, setExibe] = useState(false);
+  const [entregue, setEntregue] = useState(false);
+  const [permissao, setPermissao] = useState(false);
+  const [localizacao, setLocation] = useState(null);
+  const [selecionado, setSelecionado] = useState(null);
 
-  function telaConfirmar() {
+  const status = ["ROTA", "ATRASADO", "ENTREGUE", "NAORECEBIDO"];
+
+  async function telaConfirmar() {
     console.log("tela");
+    setExibe(true);
+    let geo = await Location.getCurrentPositionAsync();
+    console.log(geo);
+    setLocation(geo);
+
+    await updateDoc(doc(db, "entregas", selecionado), {
+      location: new GeoPoint(geo.coords.latitude, geo.coords.longitude),
+    });
   }
+
+  function tirarFoto() {
+    console.log("foto");
+  }
+
+  async function lerDados(sel) {
+    listaEntrega.length = 0;
+    const q = query(
+      collection(db, "entregas"),
+      where("status", "==", status[sel])
+    );
+    const retorno = await getDocs(q);
+    retorno.forEach((item) => {
+      let dados = item.data();
+      dados.exibe = false;
+      listaEntrega.push(dados);
+
+      setListaEntrega([...listaEntrega]);
+    });
+  }
+  useEffect(() => {
+    lerDados(0);
+
+    async function permissao() {
+      const geolocation = await location.getBackgroundPermissionAsync();
+      if (geolocation.status == "granted") {
+        setPermissao(true);
+      }
+    }
+
+    permissao();
+  }, []);
 
   return (
     <SafeAreaProvider>
@@ -52,6 +84,20 @@ export default function App() {
           style: css.header,
         }}
       />
+
+      <Tab
+        value={statusSelecionado}
+        onChange={(valor) => {
+          setStatus(valor);
+          lerDados(valor);
+        }}
+        dense
+      >
+        <Tab.Item>Rota</Tab.Item>
+        <Tab.Item>Entregue</Tab.Item>
+        <Tab.Item>Atrasado</Tab.Item>
+        <Tab.Item>Não Recebido</Tab.Item>
+      </Tab>
       {listaEntrega.map((item, idx) => {
         return (
           <ListItem.Accordion
@@ -66,12 +112,13 @@ export default function App() {
             isExpanded={item.exibe}
             onPress={() => {
               listaEntrega[idx].exibe = !listaEntrega[idx].exibe;
+              setSelecionado(item.ordem_servico);
 
               setListaEntrega([...listaEntrega]);
             }}
           >
             <View style={css.detalheEntrega}>
-              <Text>Cliente: {item.clinte}</Text>
+              <Text>Cliente: {item.cliente}</Text>
               <Text>Endereço: {item.endereco}</Text>
               <Text>Nota Fiscal: {item.nota_fiscal}</Text>
               <Text>Produto: {item.produto}</Text>
@@ -79,12 +126,31 @@ export default function App() {
               <Button
                 title="Confirmar Entrega"
                 onPress={telaConfirmar}
-                style={css.btnConfirmar}
+                style={css.btnConfirmarEntrega}
               />
             </View>
           </ListItem.Accordion>
         );
       })}
+      <Dialog isVisible={exibeDialogo}>
+        <Dialog.Title title="Confirmar a entrega" />
+        <CheckBox
+          title="Entregue"
+          checked={entregue === true}
+          onPress={() => setEntregue(true)}
+        />
+        <CheckBox
+          title="Não Entregue"
+          checked={entregue === false}
+          onPress={() => setEntregue(false)}
+        />
+
+        <Button title="Tirar Foto" onPress={tirarFoto} />
+        <Dialog.Actions>
+          <Dialog.Button title="Confirmar" />
+          <Dialog.Button title="Cancelar" onPress={() => setExibe(false)} />
+        </Dialog.Actions>
+      </Dialog>
     </SafeAreaProvider>
   );
 }
@@ -99,7 +165,7 @@ const css = StyleSheet.create({
   detalheEntrega: {
     padding: 8,
   },
-  btnConfirmar: {
+  btnConfirmarEntrega: {
     marginTop: 20,
   },
 });
